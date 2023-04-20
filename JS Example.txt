@@ -1,0 +1,59 @@
+function makeSilentTokenRequest(callback) {
+		  //Build up a hidden iframe
+		  var iframe = $('<iframe/>');
+		  iframe.attr('id', 'auth-iframe');
+		  iframe.attr('name', 'auth-iframe');
+		  iframe.appendTo('body');
+		  iframe.hide();
+		
+		  iframe.load(function() {
+		    callback(sessionStorage.accessToken);
+		  });
+		
+		  iframe.attr('src', buildAuthUrl() + '&prompt=none&domain_hint=' + 
+		    sessionStorage.userDomainType + '&login_hint=' + 
+		    sessionStorage.userSigninName);
+}
+
+function getAccessToken(callback) {
+		  var now = new Date().getTime();
+		  var isExpired = now > parseInt(sessionStorage.tokenExpires);
+		  //Do we have a token already?
+		  if (sessionStorage.accessToken && !isExpired) {
+		    //Just return what we have
+		    if (callback) {
+		      callback(sessionStorage.accessToken);
+		    }
+		  } else {
+		    //Attempt to do a hidden iframe request
+		    makeSilentTokenRequest(callback);
+		  }
+}
+
+function getUserMessagesByFolder(emailAddress,folder,folderName, callback) {
+	  getAccessToken(function(accessToken) {
+	    if (accessToken) {
+	      //Create a Graph client
+	      var client = MicrosoftGraph.Client.init({
+	    	  authProvider: function authProvider(done) {
+	          //Just return the token
+	          done(null, accessToken);
+	        }
+	      });     
+	
+	    	var selFormula = 'Id,subject,from,receivedDateTime,bodyPreview,hasAttachments,webLink,attachments,body';
+	    	      
+	     	client.api('/me/mailfolders/'+ folder +'/messages').header('X-AnchorMailbox', emailAddress).top(Number(document.getElementById('numRows').value)).select(selFormula).orderby('receivedDateTime DESC').get(function(err, res){
+	    	  
+	         if (err) {
+	            callback(null, err);
+	         } else {
+	            callback(res.value);
+	         }
+	        });
+	    } else {
+	      var error = { responseText: 'Could not retrieve access token' };
+	      callback(null, error);
+	    }
+	  });
+}
